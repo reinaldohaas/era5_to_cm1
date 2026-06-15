@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
 plot_skewt.py
-Reads a CM1 input_sounding format file and plots a Skew-T Log-P diagram using MetPy.
+Reads a CM1 input_sounding format file, computes key thermodynamic parameters,
+and plots a Skew-T Log-P diagram using MetPy.
 """
 
 import os
@@ -10,8 +11,15 @@ import argparse
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
+import metpy.calc as mpcalc
 from metpy.plots import SkewT
 from metpy.units import units
+
+def fmt_val(val, fmt, unit_str):
+    """Format pint Quantity values safely handling NaN."""
+    if val is None or np.isnan(val.magnitude):
+        return "N/A"
+    return f"{val.magnitude:{fmt}} {unit_str}"
 
 def plot_sounding(sounding_file, output_img):
     print(f"Reading sounding from: {sounding_file}")
@@ -69,24 +77,77 @@ def plot_sounding(sounding_file, output_img):
     y = np.log(df['e'] / 6.112)
     df['Td_C'] = 243.5 * y / (17.67 - y)
 
+    # Convert columns to MetPy units
+    p_units = df['P'].values * units.hPa
+    t_units = df['T_C'].values * units.degC
+    td_units = df['Td_C'].values * units.degC
+    u_units = df['U'].values * units('m/s')
+    v_units = df['V'].values * units('m/s')
+
+    print("Computing thermodynamic indices...")
+    # Surface parcel starting conditions
+    p_sfc = p_units[0]
+    t_sfc = t_units[0]
+    td_sfc = td_units[0]
+
+    # Lifted Condensation Level (LCL)
+    lcl_p, lcl_t = mpcalc.lcl(p_sfc, t_sfc, td_sfc)
+    
+    # Parcel profile
+    parcel_prof = mpcalc.parcel_profile(p_units, t_sfc, td_sfc).to(units.degC)
+
+    # SBCAPE and SBCIN
+    cape, cin = mpcalc.cape_cin(p_units, t_units, td_units, parcel_prof)
+
+    # Level of Free Convection (LFC)
+    try:
+        lfc_p, lfc_t = mpcalc.lfc(p_units, t_units, td_units, parcel_prof)
+    except Exception:
+        lfc_p, lfc_t = None, None
+
+    # Equilibrium Level (EL)
+    try:
+        el_p, el_t = mpcalc.el(p_units, t_units, td_units, parcel_prof)
+    except Exception:
+        el_p, el_t = None, None
+
+    # Precipitable Water (PW)
+    try:
+        pw = mpcalc.precipitable_water(p_units, td_units)
+    except Exception:
+        pw = None
+
+    # Print summary to terminal
+    print("=" * 40)
+    print("      THERMODYNAMIC PROFILE SUMMARY")
+    print("=" * 40)
+    print(f"Surface Pressure : {sfc_pres:.2f} hPa")
+    print(f"Surface Temp     : {t_sfc.magnitude:.1f} °C")
+    print(f"Surface Dewpoint : {td_sfc.magnitude:.1f} °C")
+    print("-" * 40)
+    print(f"SBCAPE           : {fmt_val(cape, '.1f', 'J/kg')}")
+    print(f"SBCIN            : {fmt_val(cin, '.1f', 'J/kg')}")
+    print(f"LCL Pressure     : {fmt_val(lcl_p, '.1f', 'hPa')}")
+    print(f"LFC Pressure     : {fmt_val(lfc_p, '.1f', 'hPa')}")
+    print(f"EL Pressure      : {fmt_val(el_p, '.1f', 'hPa')}")
+    print(f"Precipitable H2O : {fmt_val(pw.to('cm') if pw else None, '.2f', 'cm')}")
+    print("=" * 40)
+
     print("Plotting Skew-T...")
     fig = plt.figure(figsize=(10, 10))
     skew = SkewT(fig, rotation=45)
 
-    p_units = df['P'].values * units.hPa
-    t_units = df['T_C'].values * units.degC
-    td_units = df['Td_C'].values * units.degC
-
     # Plot profiles
     skew.plot(p_units, t_units, 'r', linewidth=2, label='Temperature (°C)')
     skew.plot(p_units, td_units, 'g', linewidth=2, label='Dewpoint (°C)')
+    skew.plot(p_units, parcel_prof, 'k--', linewidth=1, alpha=0.7, label='Sfc Parcel Profile')
 
     # Wind barbs (plot every 8th level to avoid overlap)
     decim = 8
     skew.plot_barbs(
         p_units[::decim], 
-        df['U'].values[::decim] * units('m/s'), 
-        df['V'].values[::decim] * units('m/s'),
+        u_units[::decim], 
+        v_units[::decim],
         length=6,
         linewidth=0.8
     )
@@ -101,8 +162,22 @@ def plot_sounding(sounding_file, output_img):
     skew.ax.set_xlim(-30, 40)
     skew.ax.set_xlabel('Temperature (°C)')
     skew.ax.set_ylabel('Pressure (hPa)')
+    
+    # Add index info box on the plot
+    text_str = (
+        f"SBCAPE: {fmt_val(cape, '.1f', 'J/kg')}\n"
+        f"SBCIN: {fmt_val(cin, '.1f', 'J/kg')}\n"
+        f"LCL: {fmt_val(lcl_p, '.1f', 'hPa')}\n"
+        f"LFC: {fmt_val(lfc_p, '.1f', 'hPa')}\n"
+        f"EL: {fmt_val(el_p, '.1f', 'hPa')}\n"
+        f"PW: {fmt_val(pw.to('cm') if pw else None, '.2f', 'cm')}"
+    )
+    props = dict(boxstyle='round', facecolor='wheat', alpha=0.6)
+    skew.ax.text(0.02, 0.96, text_str, transform=skew.ax.transAxes, fontsize=10,
+                 verticalalignment='top', bbox=props)
+
     plt.title(f'CM1 Input Sounding - {os.path.basename(sounding_file)}', fontsize=12, pad=15)
-    plt.legend(loc='upper left')
+    plt.legend(loc='upper right')
 
     plt.savefig(output_img, bbox_inches='tight', dpi=150)
     print(f"Plot saved successfully to: {output_img}")
