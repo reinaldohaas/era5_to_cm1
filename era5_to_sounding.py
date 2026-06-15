@@ -18,12 +18,9 @@ R_D = 287.04  # Gas constant for dry air J/(kg K)
 C_P = 1004.0  # Specific heat of dry air at constant pressure J/(kg K)
 KAPPA = R_D / C_P  # 0.285896
 
-# Target heights for CM1 model vertical grid (in meters)
-TARGET_HEIGHTS = [
-    625.0, 1875.0, 3125.0, 4375.0, 5625.0, 6875.0, 8125.0, 9375.0,
-    10625.0, 11875.0, 13125.0, 14375.0, 15625.0, 16875.0, 18125.0,
-    19375.0, 20625.0, 21875.0, 23125.0, 24375.0, 25625.0, 40000.0
-]
+# Target heights for CM1 model vertical grid (in meters AGL)
+# 0 to 20,000 meters at 150-meter intervals
+TARGET_HEIGHTS = [float(h) for h in range(0, 20001, 150)]
 
 def check_cdsapirc():
     """Verify that the .cdsapirc credential file exists."""
@@ -125,9 +122,9 @@ def download_era5(lat, lon, date_str, time_str, out_pl_file, out_sl_file):
     )
     print(f"Single levels downloaded to {out_sl_file}")
 
-def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
+def process_sounding(pl_file, sl_file, lat, lon, altitude, place, output_sounding):
     """Processes downloaded netCDF files and creates CM1 sounding file."""
-    print("Processing datasets...")
+    print(f"Processing datasets for location '{place}' with custom elevation {altitude} m ASL...")
     
     # Open datasets
     ds_pl = xr.open_dataset(pl_file)
@@ -155,8 +152,9 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
     w_sfc = (0.6220 * e_sfc) / (sfc_pres_mb - e_sfc)
     sfc_qv = w_sfc * 1000.0  # to g/kg
     
-    sfc_height_asl = sfc_geopot / G
-    print(f"Surface elevation: {sfc_height_asl:.1f} m ASL")
+    era5_sfc_height = sfc_geopot / G
+    print(f"ERA5 Grid Cell Topographic Elevation: {era5_sfc_height:.1f} m ASL")
+    print(f"Target Local Elevation ({place}): {altitude:.1f} m ASL")
     print(f"Surface pressure: {sfc_pres_mb:.2f} mb")
     print(f"Surface potential temp: {sfc_theta:.2f} K")
     print(f"Surface mixing ratio: {sfc_qv:.2f} g/kg")
@@ -171,8 +169,8 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
     levels_coord = get_coord(pt_pl, ['level', 'pressure_level', 'isobaricInhPa', 'plev'])
     levels = levels_coord.values  # in hPa
     
-    # Store profiles for interpolation
-    z_agl_profile = [0.0]
+    # Store profiles for interpolation relative to sea level (ASL)
+    z_asl_profile = [altitude]
     theta_profile = [sfc_theta]
     qv_profile = [sfc_qv]
     u_profile = [u10]
@@ -182,10 +180,9 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
     for i, p_lev in enumerate(levels):
         geopot = float(z_pl[i].values)
         z_asl = geopot / G
-        z_agl = z_asl - sfc_height_asl
         
-        # Skip levels below ground
-        if z_agl <= 0:
+        # Skip levels below custom local ground elevation
+        if z_asl <= altitude:
             continue
             
         t_k = float(t_pl[i].values)
@@ -199,37 +196,38 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
         w_val = q_kg_kg / (1.0 - q_kg_kg)
         qv_val = w_val * 1000.0
         
-        z_agl_profile.append(z_agl)
+        z_asl_profile.append(z_asl)
         theta_profile.append(theta_val)
         qv_profile.append(qv_val)
         u_profile.append(u_val)
         v_profile.append(v_val)
         
-    # Convert to numpy arrays and sort by height
-    z_agl_profile = np.array(z_agl_profile)
+    # Convert to numpy arrays and sort by height ASL
+    z_asl_profile = np.array(z_asl_profile)
     theta_profile = np.array(theta_profile)
     qv_profile = np.array(qv_profile)
     u_profile = np.array(u_profile)
     v_profile = np.array(v_profile)
     
-    sort_idx = np.argsort(z_agl_profile)
-    z_agl_profile = z_agl_profile[sort_idx]
+    sort_idx = np.argsort(z_asl_profile)
+    z_asl_profile = z_asl_profile[sort_idx]
     theta_profile = theta_profile[sort_idx]
     qv_profile = qv_profile[sort_idx]
     u_profile = u_profile[sort_idx]
     v_profile = v_profile[sort_idx]
     
-    # Interpolate onto target vertical grid
-    print(f"Interpolating data onto target grid heights ({len(TARGET_HEIGHTS)} levels)...")
-    theta_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, theta_profile)
-    qv_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, qv_profile)
-    u_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, u_profile)
-    v_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, v_profile)
+    # Interpolate onto target vertical grid (re-referenced to custom altitude)
+    print(f"Interpolating data onto target grid heights ({len(TARGET_HEIGHTS)} levels from 0 to 20,000m)...")
+    target_heights_asl = [h + altitude for h in TARGET_HEIGHTS]
+    theta_interp = np.interp(target_heights_asl, z_asl_profile, theta_profile)
+    qv_interp = np.interp(target_heights_asl, z_asl_profile, qv_profile)
+    u_interp = np.interp(target_heights_asl, z_asl_profile, u_profile)
+    v_interp = np.interp(target_heights_asl, z_asl_profile, v_profile)
     
     # Write to target output file
     with open(output_sounding, 'w') as f:
         # Header line: surface_pressure(mb) surface_potential_temp(K) surface_mixing_ratio(g/kg)
-        # Format matching the user's template exactly: "  1015.10     295.99      16.77"
+        # Format matching: "  1015.10     295.99      16.77"
         f.write(f"{sfc_pres_mb:9.2f}{sfc_theta:11.2f}{sfc_qv:11.2f}\n")
         
         # Data lines: height_agl(m) theta(K) qv(g/kg) u(m/s) v(m/s)
@@ -252,6 +250,8 @@ def main():
     parser.add_argument("--lon", type=float, default=-49.624542, help="Longitude of target location")
     parser.add_argument("--date", type=str, default="2020-12-17", help="Date in YYYY-MM-DD format")
     parser.add_argument("--time", type=str, default="03:00", help="Time in HH:MM format (UTC)")
+    parser.add_argument("--altitude", type=float, default=340.0, help="Local elevation above sea level in meters (ASL)")
+    parser.add_argument("--place", type=str, default="Rio do Sul", help="Name of the location")
     parser.add_argument("--output", type=str, default="input_sounding_data_local", help="Output file path")
     parser.add_argument("--no-download", action="store_true", help="Skip downloading, use existing files")
     
@@ -265,7 +265,7 @@ def main():
         download_era5(args.lat, args.lon, args.date, args.time, pl_file, sl_file)
         
     if os.path.exists(pl_file) and os.path.exists(sl_file):
-        process_sounding(pl_file, sl_file, args.lat, args.lon, args.output)
+        process_sounding(pl_file, sl_file, args.lat, args.lon, args.altitude, args.place, args.output)
     else:
         print(f"Error: Missing required netCDF files. Run without --no-download to fetch them.")
         sys.exit(1)
