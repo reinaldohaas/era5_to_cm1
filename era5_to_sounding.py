@@ -51,6 +51,16 @@ def get_variable(dataset, possible_names):
             return dataset[name]
     raise KeyError(f"Could not find any of the variables {possible_names} in the dataset. Available: {list(dataset.keys())}")
 
+def get_coord(dataset, possible_names):
+    """Find and return a coordinate from an xarray dataset using a list of possible names."""
+    for name in possible_names:
+        if name in dataset.coords:
+            return dataset.coords[name]
+    for name in possible_names:
+        if name in dataset:
+            return dataset[name]
+    raise KeyError(f"Could not find any of the coordinates {possible_names} in the dataset. Available coords: {list(dataset.coords.keys())}")
+
 def download_era5(lat, lon, date_str, time_str, out_pl_file, out_sl_file):
     """Downloads pressure level and single level data for the specified box."""
     c = cdsapi.Client()
@@ -158,7 +168,8 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
     v_pl = get_variable(pt_pl, ['v', 'v_component_of_wind'])
     z_pl = get_variable(pt_pl, ['z', 'geopotential'])
     
-    levels = pt_pl.level.values  # in hPa
+    levels_coord = get_coord(pt_pl, ['level', 'pressure_level', 'isobaricInhPa', 'plev'])
+    levels = levels_coord.values  # in hPa
     
     # Store profiles for interpolation
     z_agl_profile = [0.0]
