@@ -2,7 +2,7 @@
 """
 era5_to_sounding.py
 Downloads ERA5 reanalysis data from Copernicus Climate Data Store (CDS)
-and processes it into a CM1 input_sounding file.
+and processes it into a CM1 input_sounding file interpolated to a specific grid.
 """
 
 import os
@@ -17,6 +17,13 @@ G = 9.80665  # Standard gravity m/s^2
 R_D = 287.04  # Gas constant for dry air J/(kg K)
 C_P = 1004.0  # Specific heat of dry air at constant pressure J/(kg K)
 KAPPA = R_D / C_P  # 0.285896
+
+# Target heights for CM1 model vertical grid (in meters)
+TARGET_HEIGHTS = [
+    625.0, 1875.0, 3125.0, 4375.0, 5625.0, 6875.0, 8125.0, 9375.0,
+    10625.0, 11875.0, 13125.0, 14375.0, 15625.0, 16875.0, 18125.0,
+    19375.0, 20625.0, 21875.0, 23125.0, 24375.0, 25625.0, 40000.0
+]
 
 def check_cdsapirc():
     """Verify that the .cdsapirc credential file exists."""
@@ -153,10 +160,12 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
     
     levels = pt_pl.level.values  # in hPa
     
-    sounding_data = []
-    
-    # Add surface line as the first level (height AGL = 0)
-    sounding_data.append((0.0, sfc_theta, sfc_qv, u10, v10))
+    # Store profiles for interpolation
+    z_agl_profile = [0.0]
+    theta_profile = [sfc_theta]
+    qv_profile = [sfc_qv]
+    u_profile = [u10]
+    v_profile = [v10]
     
     # Loop through pressure levels
     for i, p_lev in enumerate(levels):
@@ -179,22 +188,48 @@ def process_sounding(pl_file, sl_file, lat, lon, output_sounding):
         w_val = q_kg_kg / (1.0 - q_kg_kg)
         qv_val = w_val * 1000.0
         
-        sounding_data.append((z_agl, theta_val, qv_val, u_val, v_val))
+        z_agl_profile.append(z_agl)
+        theta_profile.append(theta_val)
+        qv_profile.append(qv_val)
+        u_profile.append(u_val)
+        v_profile.append(v_val)
         
-    # Sort levels by height AGL ascending (since pressure levels list goes 1 to 1000 hPa)
-    sounding_data.sort(key=lambda x: x[0])
+    # Convert to numpy arrays and sort by height
+    z_agl_profile = np.array(z_agl_profile)
+    theta_profile = np.array(theta_profile)
+    qv_profile = np.array(qv_profile)
+    u_profile = np.array(u_profile)
+    v_profile = np.array(v_profile)
     
-    # Write to input_sounding file
+    sort_idx = np.argsort(z_agl_profile)
+    z_agl_profile = z_agl_profile[sort_idx]
+    theta_profile = theta_profile[sort_idx]
+    qv_profile = qv_profile[sort_idx]
+    u_profile = u_profile[sort_idx]
+    v_profile = v_profile[sort_idx]
+    
+    # Interpolate onto target vertical grid
+    print(f"Interpolating data onto target grid heights ({len(TARGET_HEIGHTS)} levels)...")
+    theta_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, theta_profile)
+    qv_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, qv_profile)
+    u_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, u_profile)
+    v_interp = np.interp(TARGET_HEIGHTS, z_agl_profile, v_profile)
+    
+    # Write to target output file
     with open(output_sounding, 'w') as f:
         # Header line: surface_pressure(mb) surface_potential_temp(K) surface_mixing_ratio(g/kg)
-        f.write(f"{sfc_pres_mb:12.6f} {sfc_theta:12.6f} {sfc_qv:12.6f}\n")
+        # Format matching the user's template exactly: "  1015.10     295.99      16.77"
+        f.write(f"{sfc_pres_mb:9.2f}{sfc_theta:11.2f}{sfc_qv:11.2f}\n")
         
         # Data lines: height_agl(m) theta(K) qv(g/kg) u(m/s) v(m/s)
-        for data in sounding_data:
-            f.write(f"{data[0]:12.6f} {data[1]:12.6f} {data[2]:12.6f} {data[3]:12.6f} {data[4]:12.6f}\n")
+        # Format matching: "    625.0000       299.2000       14.56000      0.0000000E+00  0.0000000E+00"
+        for i, h in enumerate(TARGET_HEIGHTS):
+            # Enforce non-negative mixing ratio
+            qv_val = max(0.0, qv_interp[i])
+            f.write(f"{h:12.4f}{theta_interp[i]:15.4f}{qv_val:15.5f}{u_interp[i]:19.7E}{v_interp[i]:15.7E}\n")
             
     print(f"Sounding file successfully written to: {output_sounding}")
-    print(f"Generated {len(sounding_data)} levels in the sounding profile.")
+    print(f"Generated {len(TARGET_HEIGHTS)} levels in the sounding profile.")
     
     # Close files
     ds_pl.close()
@@ -206,7 +241,7 @@ def main():
     parser.add_argument("--lon", type=float, default=-49.624542, help="Longitude of target location")
     parser.add_argument("--date", type=str, default="2020-12-17", help="Date in YYYY-MM-DD format")
     parser.add_argument("--time", type=str, default="03:00", help="Time in HH:MM format (UTC)")
-    parser.add_argument("--output", type=str, default="input_sounding", help="Output file path")
+    parser.add_argument("--output", type=str, default="input_sounding_data_local", help="Output file path")
     parser.add_argument("--no-download", action="store_true", help="Skip downloading, use existing files")
     
     args = parser.parse_args()
