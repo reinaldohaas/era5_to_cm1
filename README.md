@@ -116,5 +116,30 @@ Para visualizar os resultados da simulação do CM1 (precipitação acumulada na
 
 3. O script lerá automaticamente o último passo de tempo gerado pela simulação e gerará o arquivo **`cm1_plots.png`** com os 4 painéis de análise física da tempestade.
 
+## Animação e Visualização no Jupyter Notebook
+
+Para gerar um GIF animado contendo toda a evolução temporal da refletividade do radar, vento vertical W (contornos) e precipitação acumulada na superfície:
+
+1. **Garantir a instalação da biblioteca Pillow (além de netCDF4 e matplotlib)**:
+   ```bash
+   pip install pillow netcdf4 matplotlib numpy
+   ```
+2. **Gerar a animação via terminal**:
+   ```bash
+   python animate_cm1.py /caminho/para/CM1/run
+   ```
+   Isso criará o arquivo **`cm1_animation.gif`** na pasta.
+
+3. **Visualizar interativamente dentro do Jupyter Notebook**:
+   Abra seu notebook e insira em uma célula para gerar e renderizar a animação:
+   ```python
+   # Gerar o GIF animado apontando para o diretório com os dados
+   %run era5_to_cm1/animate_cm1.py .
+   
+   # Exibir a animação
+   from IPython.display import Image, display
+   display(Image(filename="cm1_animation.gif"))
+   ```
+
 
 
