@@ -78,7 +78,7 @@ Este repositório agora inclui um arquivo `namelist.input` configurado para simu
 * **Condições de Contorno**: Periódicas em X e Y (`wbc=ebc=sbc=nbc=5`) e tampa rígida em Z (`bbc=tbc=1`).
 * **Coriolis**: Desabilitado (`fcor = 0.0`).
 * **Microfísica**: Esquema Morrison Double-Moment (`ptype = 5`).
-* **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 1800 segundos (30 minutos).
+* **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 600 segundos (10 minutos).
 * **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado.
 
 ### Como Compilar e Rodar com a Topografia (IBM) e NetCDF:

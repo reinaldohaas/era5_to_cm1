@@ -16,7 +16,7 @@
  dy     =    50.0,
  dz     =   150.0,
  dtl    =   1.000,
- timax  =  1800.0,
+ timax  =   600.0,
  run_time =  -999.9,
  tapfrq =    60.0,
  rstfrq = -3600.0,
