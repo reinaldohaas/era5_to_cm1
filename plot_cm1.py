@@ -10,14 +10,17 @@ def plot_cm1_results(run_dir=".", output_image="cm1_plots.png"):
     e plota mapas horizontais (Precipitação e Refletividade Máxima) e cortes
     verticais (X-Z) da tempestade através do centro do domínio.
     """
-    # Encontra arquivos cm1out_*.nc
-    nc_files = sorted(glob.glob(os.path.join(run_dir, "cm1out_*.nc")))
+    # Procura primeiro pelo arquivo principal cm1out.nc
+    nc_files = glob.glob(os.path.join(run_dir, "cm1out.nc"))
     if not nc_files:
-        print("Nenhum arquivo 'cm1out_*.nc' encontrado no diretório:", run_dir)
-        print("Certifique-se de que a simulação rodou com sucesso e os arquivos de saída estão presentes.")
+        # Se não encontrar, procura por cm1out_*.nc excluindo arquivos de estatísticas e metadados
+        all_nc = glob.glob(os.path.join(run_dir, "cm1out_*.nc"))
+        nc_files = sorted([f for f in all_nc if not any(x in f for x in ["stats", "metadata", "_s.nc", "_u.nc", "_v.nc", "_w.nc"])])
+        
+    if not nc_files:
+        print("Nenhum arquivo 'cm1out.nc' ou 'cm1out_*.nc' válido encontrado no diretório:", run_dir)
+        print("Arquivos de estatísticas (*_stats.nc) não contêm os campos 2D/3D necessários.")
         return
-    
-    print(f"Encontrados {len(nc_files)} arquivos de saída do CM1.")
     
     # Abre o último arquivo de saída para ler o estado acumulado final
     last_file = nc_files[-1]
@@ -33,15 +36,16 @@ def plot_cm1_results(run_dir=".", output_image="cm1_plots.png"):
     
     # 1. Precipitação Acumulada na Superfície (em mm)
     # No CM1 com outunits=1 (MKS), a chuva é salva em 'cm'. Convertemos multiplicando por 10.
-    rain_cm = ds.variables['rain'][0, :, :]
+    # Usamos o índice [-1] para pegar o último passo de tempo no arquivo
+    rain_cm = ds.variables['rain'][-1, :, :]
     rain_mm = rain_cm * 10.0
     
     # 2. Refletividade do Radar (dBZ) - Calculamos a Refletividade Máxima da coluna (Cref)
-    dbz = ds.variables['dbz'][0, :, :, :]  # Shape: (z, y, x)
+    dbz = ds.variables['dbz'][-1, :, :, :]  # Shape: (z, y, x)
     cref = np.max(dbz, axis=0)            # Máximo vertical
     
     # 3. Velocidade Vertical (W)
-    w = ds.variables['w'][0, :, :, :]      # Shape: (z_face, y, x)
+    w = ds.variables['w'][-1, :, :, :]      # Shape: (z_face, y, x)
     # Interpola W das faces para o centro da célula vertical para alinhar com dbz e z
     if w.shape[0] > len(z):
         w = 0.5 * (w[:-1, :, :] + w[1:, :, :])
