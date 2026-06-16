@@ -93,7 +93,10 @@ Este repositório agora inclui um arquivo `namelist.input` configurado para simu
 3. **Copiar arquivos de simulação**:
    Copie os arquivos `namelist.input` e `input_sounding` gerados para a pasta onde você executa o modelo (`CM1/run/`).
 4. **Executar**:
-   Rode o executável compilado (ex: `mpirun -np <N> ./cm1.exe`).
+   Rode o executável compilado usando 30 núcleos:
+   ```bash
+   mpirun -np 30 ./cm1.exe
+   ```
 
 ## Plotagem dos Resultados (Gráficos)
 
