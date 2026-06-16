@@ -81,12 +81,14 @@ Este repositório agora inclui um arquivo `namelist.input` configurado para simu
 * **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 600 segundos (10 minutos).
 * **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado.
 
-### Como Compilar e Rodar com a Topografia (IBM):
+### Como Compilar e Rodar com a Topografia (IBM) e NetCDF:
 
-1. **Copiar o código-fonte**:
-   Copie o arquivo [ib_module.F](file:///C:/Users/haas/github/era5_to_cm1/ib_module.F) deste repositório para o diretório de código-fonte do seu CM1 (substituindo o arquivo existente em `CM1/src/ib_module.F`).
+1. **Copiar o código-fonte e o Makefile**:
+   - Copie o arquivo [ib_module.F](file:///C:/Users/haas/github/era5_to_cm1/ib_module.F) deste repositório para o diretório de código-fonte do seu CM1 (substituindo `CM1/src/ib_module.F`).
+   - Copie o arquivo [Makefile](file:///C:/Users/haas/github/era5_to_cm1/Makefile) deste repositório para o diretório de código-fonte do seu CM1 (substituindo `CM1/src/Makefile`).
+     *(Nota: O Makefile oficial do NCAR tem um bug onde os parâmetros de linkagem `-lnetcdf` e `-lnetcdff` são passados antes dos arquivos objetos `.o`, fazendo com que o linker do GNU ignore os símbolos e gere erros de `undefined reference`. Nosso Makefile corrigido move essas flags para o final da linha de comando e corrige a ordem de dependências para `-lnetcdff -lnetcdf`).*
 2. **Recompilar o Modelo**:
-   Recompile o executável do CM1 na sua máquina ou cluster (ex: rodando `make` ou `make -j <N>` dentro da pasta `CM1/src/` ou do root).
+   Recompile o executável do CM1 na sua máquina ou cluster (ex: rodando `make clean` e depois `make USE_MPI=true USE_NETCDF=true NETCDFBASE=/caminho/do/netcdf` dentro da pasta `CM1/src/`).
 3. **Copiar arquivos de simulação**:
    Copie os arquivos `namelist.input` e `input_sounding` gerados para a pasta onde você executa o modelo (`CM1/run/`).
 4. **Executar**:
