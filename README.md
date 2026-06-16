@@ -78,13 +78,14 @@ Este repositório agora inclui um arquivo `namelist.input` configurado para simu
 * **Condições de Contorno**: Periódicas em X e Y (`wbc=ebc=sbc=nbc=5`) e tampa rígida em Z (`bbc=tbc=1`).
 * **Coriolis**: Desabilitado (`fcor = 0.0`).
 * **Microfísica**: Esquema Morrison Double-Moment (`ptype = 5`).
-* **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 600 segundos (10 minutos).
+* **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 1800 segundos (30 minutos).
 * **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado.
 
 ### Como Compilar e Rodar com a Topografia (IBM) e NetCDF:
 
 1. **Copiar o código-fonte e o Makefile**:
    - Copie o arquivo [ib_module.F](file:///C:/Users/haas/github/era5_to_cm1/ib_module.F) deste repositório para o diretório de código-fonte do seu CM1 (substituindo `CM1/src/ib_module.F`).
+   - Copie o arquivo [init3d.F](file:///C:/Users/haas/github/era5_to_cm1/init3d.F) deste repositório para o diretório de código-fonte do seu CM1 (substituindo `CM1/src/init3d.F`).
    - Copie o arquivo [Makefile](file:///C:/Users/haas/github/era5_to_cm1/Makefile) deste repositório para o diretório de código-fonte do seu CM1 (substituindo `CM1/src/Makefile`).
      *(Nota: O Makefile oficial do NCAR tem um bug onde os parâmetros de linkagem `-lnetcdf` e `-lnetcdff` são passados antes dos arquivos objetos `.o`, fazendo com que o linker do GNU ignore os símbolos e gere erros de `undefined reference`. Nosso Makefile corrigido move essas flags para o final da linha de comando e corrige a ordem de dependências para `-lnetcdff -lnetcdf`).*
 2. **Recompilar o Modelo**:

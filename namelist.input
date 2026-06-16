@@ -1,7 +1,7 @@
 
  &param0
- nx           =      20,
- ny           =      20,
+ nx           =     100,
+ ny           =     100,
  nz           =     133,
  ppnode       =     128,
  timeformat   =       2,
@@ -12,11 +12,11 @@
  /
 
  &param1
- dx     =   500.0,
- dy     =   500.0,
+ dx     =    50.0,
+ dy     =    50.0,
  dz     =   150.0,
  dtl    =   1.000,
- timax  =   600.0,
+ timax  =  1800.0,
  run_time =  -999.9,
  tapfrq =    60.0,
  rstfrq = -3600.0,
@@ -156,18 +156,18 @@
 
  &param4
  stretch_x =      0,
- dx_inner  =     500.0,
- dx_outer  =     500.0,
- nos_x_len =   10000.0,
- tot_x_len =   10000.0,
+ dx_inner  =      50.0,
+ dx_outer  =      50.0,
+ nos_x_len =    5000.0,
+ tot_x_len =    5000.0,
  /
 
  &param5
  stretch_y =      0,
- dy_inner  =     500.0,
- dy_outer  =     500.0,
- nos_y_len =   10000.0,
- tot_y_len =   10000.0,
+ dy_inner  =      50.0,
+ dy_outer  =      50.0,
+ nos_y_len =    5000.0,
+ tot_y_len =    5000.0,
  /
 
  &param6
