@@ -68,3 +68,18 @@ O script realiza as seguintes transformações nos dados do ERA5 para atender à
    * Para a superfície, a temperatura do ponto de orvalho a 2 metros ($T_{d,2m}$) é convertida para pressão de vapor e então calculada a razão de mistura de superfície em g/kg.
 4. **Alinhamento da Superfície**:
    A primeira linha do perfil vertical ($z_{AGL} = 0$) é preenchida com as variáveis de superfície (temperatura potencial calculada a partir do termômetro a 2m, umidade de 2m e ventos a 10 metros para as componentes U e V). Os níveis de pressão que ficam abaixo da cota do relevo são descartados automaticamente.
+
+## Configuração do Modelo CM1 (Namelist.input)
+
+Este repositório agora inclui um arquivo `namelist.input` configurado para simular o modelo atmosférico no CM1 imitando as configurações físicas do **Toró Model** (`toro-model`):
+* **Grade (Grid)**: `nx = 20`, `ny = 20`, `nz = 133` (com resolução vertical constante `dz = 150.0` m e horizontal `dx = dy = 500.0` m).
+* **Condições de Contorno**: Periódicas em X e Y (`wbc=ebc=sbc=nbc=5`) e tampa rígida em Z (`bbc=tbc=1`).
+* **Coriolis**: Desabilitado (`fcor = 0.0`).
+* **Microfísica**: Esquema Morrison Double-Moment (`ptype = 5`).
+* **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 600 segundos (10 minutos).
+* **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado (que vai de 0 a 19.950 m de altitude AGL).
+
+### Como Rodar no CM1:
+1. Copie o arquivo `namelist.input` e o arquivo `input_sounding` deste repositório para a sua pasta de execução do CM1 (onde fica o executável do modelo).
+2. Execute o executável do CM1 (ex: `./cm1.exe` ou `mpirun -np <N> ./cm1.exe`).
+
