@@ -63,7 +63,7 @@
 
       ! Set case here:
 
-      ib_init  =  4
+      ! ib_init  =  4
 
 
 
