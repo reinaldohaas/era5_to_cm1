@@ -94,4 +94,23 @@ Este repositório agora inclui um arquivo `namelist.input` configurado para simu
 4. **Executar**:
    Rode o executável compilado (ex: `mpirun -np <N> ./cm1.exe`).
 
+## Plotagem dos Resultados (Gráficos)
+
+Para visualizar os resultados da simulação do CM1 (precipitação acumulada na superfície, refletividade máxima da tempestade e fatias verticais do vento vertical $W$ e da refletividade no centro do desfiladeiro), utilize o script de plotagem [plot_cm1.py](file:///C:/Users/haas/github/era5_to_cm1/plot_cm1.py) incluído neste repositório.
+
+### Como Executar a Plotagem:
+
+1. Garanta que você tenha o matplotlib e a biblioteca netCDF4 instalados em seu ambiente python:
+   ```bash
+   pip install matplotlib netcdf4 numpy
+   ```
+2. Execute o script passando o diretório onde estão localizados os arquivos de saída `.nc` do CM1 (por padrão, a pasta `run` do modelo):
+   ```bash
+   python plot_cm1.py /caminho/para/CM1/run
+   ```
+   *(Caso execute o script dentro da própria pasta de saídas, basta omitir o argumento: `python plot_cm1.py`)*.
+
+3. O script lerá automaticamente o último passo de tempo gerado pela simulação e gerará o arquivo **`cm1_plots.png`** com os 4 painéis de análise física da tempestade.
+
+
 
