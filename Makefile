@@ -139,7 +139,7 @@ endif
 #-----------------------------------------------------------------------------
 #  Intel compiler
 #-----------------------------------------------------------------------------
-ifeq (${FC},ifort)
+ifneq ($(filter $(FC),ifort mpiifort),)
     # replace -xHost with -march=core-avx2 to make sure the same code builds on
     # both Intel and AMD CPUs 
     OPTS         += -O1 -assume byterecl -fp-model precise -ftz -no-fma -diag-disable=10448
@@ -153,7 +153,7 @@ endif
 #-----------------------------------------------------------------------------
 #  GNU compiler
 #-----------------------------------------------------------------------------
-ifeq (${FC},gfortran)
+ifneq ($(filter $(FC),gfortran mpifort mpif90),)
     OPTS         += -ffree-form -ffree-line-length-none -O2 -finline-functions -fallow-argument-mismatch
     CPP          += cpp -C -P -traditional -Wno-invalid-pp-token -ffreestanding
     ifeq (${USE_OPENMP_L},true)
