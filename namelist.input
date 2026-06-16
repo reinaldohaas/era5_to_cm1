@@ -393,8 +393,8 @@
  /
 
  &param20
- do_ib        =    .false.,
- ib_init      =       4,
+ do_ib        =     .true.,
+ ib_init      =       6,
  top_cd       =      0.4,
  side_cd      =      0.4,
  /

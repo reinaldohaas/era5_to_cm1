@@ -71,15 +71,25 @@ O script realiza as seguintes transformações nos dados do ERA5 para atender à
 
 ## Configuração do Modelo CM1 (Namelist.input)
 
-Este repositório agora inclui um arquivo `namelist.input` configurado para simular o modelo atmosférico no CM1 imitando as configurações físicas do **Toró Model** (`toro-model`):
+Este repositório agora inclui um arquivo `namelist.input` configurado para simular o modelo atmosférico no CM1 imitando as configurações físicas do **Toró Model** (`toro-model`) e ativando a topografia do desfiladeiro de **Valada São Paulo** via **Immersed Boundary Method (IBM)**:
 * **Grade (Grid)**: `nx = 20`, `ny = 20`, `nz = 133` (com resolução vertical constante `dz = 150.0` m e horizontal `dx = dy = 500.0` m).
+  * *Dica de Resolução*: Para resolver a largura de 200m do desfiladeiro, altere na namelist para `dx = dy = 50.0` m e aumente os pontos horizontais para `nx = ny = 100` (mantendo o domínio de 5 km). No grid padrão de 500m o desfiladeiro ficará menor que uma célula e não será resolvido.
+* **Fronteira Imersa (IBM)**: Ativada em `&param20` com `do_ib = .true.` e `ib_init = 6` (Cânion de Valada São Paulo).
 * **Condições de Contorno**: Periódicas em X e Y (`wbc=ebc=sbc=nbc=5`) e tampa rígida em Z (`bbc=tbc=1`).
 * **Coriolis**: Desabilitado (`fcor = 0.0`).
 * **Microfísica**: Esquema Morrison Double-Moment (`ptype = 5`).
 * **Passo de Tempo**: CFL adaptativo (`adapt_dt = 1`) com duração de simulação de 600 segundos (10 minutos).
-* **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado (que vai de 0 a 19.950 m de altitude AGL).
+* **Sondagem**: Lê o arquivo de entrada `input_sounding` gerado.
 
-### Como Rodar no CM1:
-1. Copie o arquivo `namelist.input` e o arquivo `input_sounding` deste repositório para a sua pasta de execução do CM1 (onde fica o executável do modelo).
-2. Execute o executável do CM1 (ex: `./cm1.exe` ou `mpirun -np <N> ./cm1.exe`).
+### Como Compilar e Rodar com a Topografia (IBM):
+
+1. **Copiar o código-fonte**:
+   Copie o arquivo [ib_module.F](file:///C:/Users/haas/github/era5_to_cm1/ib_module.F) deste repositório para o diretório de código-fonte do seu CM1 (substituindo o arquivo existente em `CM1/src/ib_module.F`).
+2. **Recompilar o Modelo**:
+   Recompile o executável do CM1 na sua máquina ou cluster (ex: rodando `make` ou `make -j <N>` dentro da pasta `CM1/src/` ou do root).
+3. **Copiar arquivos de simulação**:
+   Copie os arquivos `namelist.input` e `input_sounding` gerados para a pasta onde você executa o modelo (`CM1/run/`).
+4. **Executar**:
+   Rode o executável compilado (ex: `mpirun -np <N> ./cm1.exe`).
+
 
