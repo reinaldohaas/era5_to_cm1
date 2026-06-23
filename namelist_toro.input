@@ -261,7 +261,7 @@
 
  &param9
  ! --- Variáveis de Saída NetCDF ---
- output_format    = 2,
+ output_format    = 1,     ! NetCDF3 classic (sem HDF5) — compatível com VLab
  output_filetype  = 1,
  output_interp    = 0,
  output_rain      = 1,     ! precipitação acumulada
