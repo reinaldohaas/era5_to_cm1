@@ -1,0 +1,401 @@
+
+! ============================================================================
+! namelist.input — CM1 r21
+! Caso: Supercélula subtropical tipo Toró
+!       Sondagem WK analítica (isnd=5), DSD estreita (ndcnst=3000),
+!       Morrison 2-moment + Phillips 2017 collisional breakup (ptype=5)
+!       Referências:
+!         - Klemp & Wilhelmson (1978) J. Atmos. Sci.
+!         - Weisman & Klemp (1982) Mon. Wea. Rev.
+!         - Morrison et al. (2009) Mon. Wea. Rev.
+!         - Phillips et al. (2017) J. Atmos. Sci.
+! ============================================================================
+
+ &param0
+ ! --- Grade ---
+ nx           =     400,   ! pontos em x  → 40 km com dx=100m
+ ny           =       1,   ! 2D (x-z): ny=1
+ nz           =      80,   ! pontos em z  → 12 km com dz=150m
+ ppnode       =     128,
+ timeformat   =       2,   ! hh:mm:ss
+ timestats    =       1,
+ terrain_flag = .false.,
+ procfiles    = .false.,
+ outunits     =       1,   ! saídas em segundos
+ /
+
+ &param1
+ ! --- Espaço e Tempo ---
+ dx     =   100.0,         ! m — resolução horizontal
+ dy     =   100.0,         ! m — (irrelevante em 2D)
+ dz     =   150.0,         ! m — resolução vertical
+ dtl    =     2.0,         ! s — passo temporal (adapt_dt reajusta)
+ timax  =  5400.0,         ! s — 90 minutos de simulação
+ run_time =  -999.9,
+ tapfrq =   300.0,         ! s — saída a cada 5 min
+ rstfrq = -3600.0,
+ statfrq =    10.0,        ! s — estatísticas a cada 10 s
+ prclfrq =   300.0,
+ /
+
+ &param2
+ ! --- Configuração Dinâmica ---
+ cm1setup  =  1,
+ testcase  =  0,
+ adapt_dt  =  1,           ! passo temporal adaptativo (CFL)
+ irst      =  0,           ! 0 = começa do zero (não restart)
+ rstnum    =  1,
+ iconly    =  0,
+ hadvordrs =  5,           ! advecção escalar: 5a ordem
+ vadvordrs =  5,
+ hadvordrv =  5,           ! advecção momento: 5a ordem
+ vadvordrv =  5,
+ advwenos  =  2,
+ advwenov  =  0,
+ weno_order = 5,
+ apmasscon =  1,           ! conservação de massa anelástica
+ idiff     =  0,
+ mdiff     =  0,
+ difforder =  6,
+ imoist    =  1,           ! microfísica úmida habilitada
+ ipbl      =  0,           ! sem PBL (LES resolve turbulência)
+ sgsmodel  =  1,           ! SGS: TKE 1.5-order (Deardorff)
+ tconfig   =  1,
+ bcturbs   =  1,
+ horizturb =  0,
+ doimpl    =  0,
+ irdamp    =  1,           ! sponge no topo (Rayleigh damping)
+ hrdamp    =  0,
+ psolver   =  2,           ! solver de pressão: iterativo
+ ! --- Microfísica ---
+ ptype     =  5,           ! Morrison double-moment (+ Phillips 2017)
+ ihail     =  1,           ! granizo habilitado (igraup=0 interno)
+ iautoc    =  1,           ! autoconversão habilitada
+ cuparam   =  0,
+ ! --- Dinâmica Base ---
+ icor      =  0,           ! sem Coriolis (simulação convectiva)
+ betaplane =  0,
+ lspgrad   =  0,
+ eqtset    =  2,           ! equações não-hidrostáticas completas
+ idiss     =  1,
+ efall     =  0,
+ rterm     =  0,
+ ! --- Condições de Contorno ---
+ wbc       =  2,           ! oeste: aberta (radiante)
+ ebc       =  2,           ! leste: aberta
+ sbc       =  5,           ! sul:   periódica (irrelevante em 2D)
+ nbc       =  5,           ! norte: periódica
+ bbc       =  1,           ! base:  livre-deslizamento
+ tbc       =  1,           ! topo:  rígido + sponge
+ irbc      =  3,           ! relaxamento nas bordas abertas
+ roflux    =  0,
+ nudgeobc  =  0,
+ ! --- Sondagem e Inicialização ---
+ isnd      =  5,           ! Weisman-Klemp analítica
+                           !   θ_sfc=300K, RH_sfc=75% (PBL 14g/kg)
+                           !   z_trop=12km, θ_trop=343K, T_trop=213K
+ iwnd      =  1,           ! vento: perfil linear (via param8)
+ itern     =  0,           ! sem topografia
+ iinit     =  1,           ! bolha quente (+3K, R_h=R_v=1500m, z=1500m)
+ irandp    =  0,
+ ibalance  =  0,
+ iorigin   =  2,
+ axisymm   =  0,
+ imove     =  0,
+ iptra     =  0,
+ npt       =  1,
+ pdtra     =  1,
+ iprcl     =  0,
+ nparcels  =  1,
+ /
+
+ &param3
+ ! --- Difusão e Sponge ---
+ kdiff2  =     75.0,       ! m²/s — difusão de 2a ordem (suave)
+ kdiff6  =      0.040,
+ fcor    =  0.00000,       ! s⁻¹ — sem Coriolis
+ kdiv    =  0.10,
+ alph    =  0.60,
+ rdalpha =  3.3333333e-3,  ! s⁻¹ — taxa Rayleigh (topo)
+ zd      =  9000.0,        ! m — início do sponge no topo
+ xhd     =  1500.0,        ! m — sponge lateral
+ alphobc =    60.0,
+ umove   =    0.0,         ! m/s — movimento do domínio
+ vmove   =    0.0,
+ ! --- SGS ---
+ v_t     =    7.0,
+ l_h     =  100.0,         ! m — escala horizontal (igual ao dx)
+ lhref1  =  100.0,
+ lhref2  = 1000.0,
+ l_inf   =   75.0,
+ ! ================================================================
+ ! CHAVE PRINCIPAL — DSD Estreita (tipo Toró)
+ ! Morrison usa a fórmula de Martin et al. (1994) para calcular
+ ! o parâmetro de forma μ (PGAM) da DSD de gotículas de nuvem:
+ !
+ !   PGAM = 1 / (0.0005714 × Nc + 0.2714)² - 1
+ !
+ ! Com ndcnst = 3000 cm⁻³:
+ !   PGAM ≈ 9.5  (máximo permitido = 10)
+ !   → DSD muito estreita: gotas pequenas e uniformes (~7µm raio)
+ !   → Favorece H-M (rime-splintering) e breakup colisional (Phillips)
+ !
+ ! Comparação:
+ !   ndcnst = 100  → marítimo, DSD larga (μ≈2)
+ !   ndcnst = 250  → continental típico (μ≈4)
+ !   ndcnst = 3000 → subtropical poluído / convecção Toró (μ≈10)
+ ! ================================================================
+ ndcnst  = 3000.0,         ! cm⁻³ — concentração de gotículas de nuvem
+ nt_c    =  250.0,         ! (usado só para ptype=3, não para 5)
+ csound  =  300.0,
+ cstar   =   30.0,
+ /
+
+ &param11
+ ! --- Posição geográfica (referência — sem radiação) ---
+ radopt  =        0,       ! sem radiação
+ dtrad   =    300.0,
+ ctrlat  =   -26.89,       ! lat: Planalto Mirador SC (Toró)
+ ctrlon  =   -49.37,       ! lon: Planalto Mirador SC
+ year    =     2019,
+ month   =       12,
+ day     =       06,       ! referência ao evento
+ hour    =       21,
+ minute  =        0,
+ second  =       00,
+ /
+
+ &param12
+ ! --- Superfície idealizada (sem fluxos) ---
+ isfcflx    =      0,
+ sfcmodel   =      0,
+ oceanmodel =      0,
+ initsfc    =      1,
+ tsk0       =  300.0,      ! K — θ superfície (~27°C)
+ tmn0       =  298.0,
+ xland0     =    1.0,
+ lu0        =     16,
+ season     =      1,
+ cecd       =      3,
+ pertflx    =      0,
+ cnstce     =  0.001,
+ cnstcd     =  0.001,
+ isftcflx   =      0,
+ iz0tlnd    =      0,
+ oml_hml0   =   50.0,
+ oml_gamma  =   0.14,
+ set_flx    =      0,
+ cnst_shflx =   0.24,
+ cnst_lhflx = 5.2e-5,
+ set_znt    =      0,
+ cnst_znt   =   0.16,
+ set_ust    =      0,
+ cnst_ust   =   0.25,
+ ramp_sgs   =      1,
+ ramp_time  = 1800.0,
+ t2p_avg   =       1,
+ /
+
+ &param4
+ ! --- Grade em X ---
+ stretch_x =      0,
+ dx_inner  =    100.0,
+ dx_outer  =    100.0,
+ nos_x_len =  40000.0,     ! m — domínio de 40 km
+ tot_x_len =  40000.0,
+ /
+
+ &param5
+ ! --- Grade em Y (2D: ny=1) ---
+ stretch_y =      0,
+ dy_inner  =    100.0,
+ dy_outer  =    100.0,
+ nos_y_len =    100.0,
+ tot_y_len =    100.0,
+ /
+
+ &param6
+ ! --- Grade Vertical ---
+ stretch_z =  0,
+ ztop      = 12000.0,      ! m — topo (≈ tropopausa WK)
+ str_bot   =     0.0,
+ str_top   =  2000.0,
+ dz_bot    =   150.0,      ! m — resolução vertical
+ dz_top    =   150.0,
+ /
+
+ &param7
+ ptc_top   = 343.0,        ! K — θ tropopausa (compatível com isnd=5)
+ ptc_bot   = 300.0,        ! K — θ superfície
+ bc_temp   = 1,
+ viscosity = 25.0,
+ pr_num    = 0.72,
+ /
+
+ &param8
+ ! --- Cisalhamento do Vento (iwnd=1: perfil linear) ---
+ ! u(z) = var1 + var2 * z  →  u_sfc=5 m/s, du/dz=3e-3 1/s
+ ! v(z) = var3 + var4 * z  →  v_sfc=5 m/s, dv/dz=2e-3 1/s
+ ! Cisalhamento 0-6km ≈ 5 + 3e-3*6000 = 23 m/s  (supercélula)
+ var1      =   5.0,        ! m/s — u na superfície
+ var2      =   3.0e-3,     ! 1/s — du/dz
+ var3      =   5.0,        ! m/s — v na superfície
+ var4      =   2.0e-3,     ! 1/s — dv/dz
+ var5      =   0.0,
+ var6      =   0.0,
+ var7      =   0.0,
+ var8      =   0.0,
+ var9      =   0.0,
+ var10     =   0.0,
+ var11     =   0.0,
+ var12     =   0.0,
+ var13     =   0.0,
+ var14     =   0.0,
+ var15     =   0.0,
+ var16     =   0.0,
+ var17     =   0.0,
+ var18     =   0.0,
+ var19     =   0.0,
+ var20     =   0.0,
+ /
+
+ &param9
+ ! --- Variáveis de Saída NetCDF ---
+ output_format    = 2,
+ output_filetype  = 1,
+ output_interp    = 0,
+ output_rain      = 1,     ! precipitação acumulada
+ output_sws       = 1,
+ output_svs       = 1,
+ output_sps       = 1,
+ output_srs       = 1,
+ output_sgs       = 1,
+ output_sus       = 1,
+ output_shs       = 1,
+ output_coldpool  = 1,     ! pool frio
+ output_sfcflx    = 0,
+ output_sfcparams = 0,
+ output_sfcdiags  = 0,
+ output_psfc      = 1,
+ output_zs        = 0,
+ output_zh        = 0,
+ output_basestate = 1,     ! estado base WK
+ output_th        = 1,
+ output_thpert    = 1,     ! perturbação θ (microexplosão)
+ output_prs       = 1,
+ output_prspert   = 1,
+ output_pi        = 0,
+ output_pipert    = 0,
+ output_rho       = 1,
+ output_rhopert   = 0,
+ output_tke       = 1,
+ output_km        = 0,
+ output_kh        = 0,
+ output_qv        = 1,
+ output_qvpert    = 1,
+ output_q         = 1,     ! qc, qr, qi, qs, qg (hidrometeoros)
+ output_dbz       = 1,     ! refletividade simulada
+ output_buoyancy  = 1,
+ output_u         = 1,
+ output_upert     = 1,
+ output_uinterp   = 1,
+ output_v         = 0,     ! irrelevante em 2D
+ output_vpert     = 0,
+ output_vinterp   = 0,
+ output_w         = 1,     ! velocidade vertical
+ output_winterp   = 1,
+ output_vort      = 1,
+ output_pv        = 0,
+ output_uh        = 1,     ! helicidade updraft
+ output_pblten    = 0,
+ output_dissten   = 0,
+ output_fallvel   = 1,     ! velocidade de queda
+ output_nm        = 0,
+ output_def       = 0,
+ output_radten    = 0,
+ output_cape      = 1,
+ output_cin       = 1,
+ output_lcl       = 1,
+ output_lfc       = 1,
+ output_pwat      = 1,
+ output_lwp       = 1,
+ output_thbudget  = 0,
+ output_qvbudget  = 0,
+ output_ubudget   = 0,
+ output_vbudget   = 0,
+ output_wbudget   = 0,
+ output_pdcomp    = 0,
+ /
+
+ &param16
+ restart_format   = 1,
+ restart_filetype = 2,
+ restart_reset_frqtim  =  .true.,
+ restart_file_theta    =  .false.,
+ restart_file_dbz      =  .false.,
+ restart_file_th0      =  .false.,
+ restart_file_prs0     =  .false.,
+ restart_file_pi0      =  .false.,
+ restart_file_rho0     =  .false.,
+ restart_file_qv0      =  .false.,
+ restart_file_u0       =  .false.,
+ restart_file_v0       =  .false.,
+ restart_file_zs       =  .false.,
+ restart_file_zh       =  .false.,
+ restart_file_zf       =  .false.,
+ restart_file_diags    =  .false.,
+ restart_use_theta     =  .false.,
+ /
+
+ &param10
+ stat_w        = 1,
+ stat_wlevs    = 1,
+ stat_u        = 1,
+ stat_v        = 1,
+ stat_rmw      = 1,
+ stat_pipert   = 1,
+ stat_prspert  = 1,
+ stat_thpert   = 1,
+ stat_q        = 1,
+ stat_tke      = 1,
+ stat_km       = 1,
+ stat_kh       = 1,
+ stat_div      = 1,
+ stat_rh       = 1,
+ stat_rhi      = 1,
+ stat_the      = 1,
+ stat_cloud    = 1,
+ stat_sfcprs   = 1,
+ stat_wsp      = 1,
+ stat_cfl      = 1,
+ stat_vort     = 1,
+ stat_tmass    = 1,
+ stat_tmois    = 1,
+ stat_qmass    = 1,
+ stat_tenerg   = 1,
+ stat_mo       = 1,
+ stat_tmf      = 1,
+ stat_pcn      = 1,
+ stat_qsrc     = 1,
+ /
+
+ &param14
+ dodomaindiag   =    .false.,
+ diagfrq        =       60.0,
+ /
+
+ &param15
+ doazimavg        =    .false.,
+ azimavgfrq       =     3600.0,
+ rlen             =    40000.0,
+ do_adapt_move    =    .false.,
+ adapt_move_frq   =     3600.0,
+ /
+
+ &nssl2mom_params
+   alphah  = 0,
+   alphahl = 0.5,
+   ccn     = 0.6e9,
+   cnor    = 8.e6,
+   cnoh    = 4.e4,
+ /
