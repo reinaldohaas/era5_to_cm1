@@ -13,7 +13,7 @@
 
  &param0
  ! --- Grade ---
- nx           =     400,   ! pontos em x  → 40 km com dx=100m
+ nx           =    1200,   ! pontos em x  → 120 km com dx=100m
  ny           =       1,   ! 2D (x-z): ny=1
  nz           =      80,   ! pontos em z  → 12 km com dz=150m
  ppnode       =     128,
@@ -30,7 +30,7 @@
  dy     =   100.0,         ! m — (irrelevante em 2D)
  dz     =   150.0,         ! m — resolução vertical
  dtl    =     2.0,         ! s — passo temporal (adapt_dt reajusta)
- timax  =  5400.0,         ! s — 90 minutos de simulação
+ timax  =  7200.0,         ! s — 120 minutos de simulação
  run_time =  -999.9,
  tapfrq =   300.0,         ! s — saída a cada 5 min
  rstfrq = -3600.0,
@@ -96,12 +96,14 @@
                            !   z_trop=12km, θ_trop=343K, T_trop=213K
  iwnd      =  1,           ! vento: perfil linear (via param8)
  itern     =  0,           ! sem topografia
- iinit     =  1,           ! bolha quente (+3K, R_h=R_v=1500m, z=1500m)
- irandp    =  0,
+ iinit     =  8,           ! bolha WK clássica: bhrad=10km, bvrad=1.5km,
+                           !   +2K + ruído aleatório (Klemp & Wilhelmson 1978)
+                           !   (iinit=1 tem bhrad=1.5km — pequena demais!)
+ irandp    =  1,           ! perturbações aleatórias na camada limite
  ibalance  =  0,
  iorigin   =  2,
  axisymm   =  0,
- imove     =  0,
+ imove     =  1,           ! domínio se move com a tempestade
  iptra     =  0,
  npt       =  1,
  pdtra     =  1,
@@ -120,8 +122,9 @@
  zd      =  9000.0,        ! m — início do sponge no topo
  xhd     =  1500.0,        ! m — sponge lateral
  alphobc =    60.0,
- umove   =    0.0,         ! m/s — movimento do domínio
- vmove   =    0.0,
+ umove   =   12.0,         ! m/s — velocidade do domínio em x (segue a tempestade)
+                           !   estimativa: u_sfc + du/dz*z_storm/2 ≈ 5 + 3e-3*4000/2 ≈ 11 m/s
+ vmove   =    6.0,         ! m/s — velocidade do domínio em y
  ! --- SGS ---
  v_t     =    7.0,
  l_h     =  100.0,         ! m — escala horizontal (igual ao dx)
@@ -201,8 +204,8 @@
  stretch_x =      0,
  dx_inner  =    100.0,
  dx_outer  =    100.0,
- nos_x_len =  40000.0,     ! m — domínio de 40 km
- tot_x_len =  40000.0,
+ nos_x_len = 120000.0,     ! m — domínio de 120 km (tempestade permanece no centro)
+ tot_x_len = 120000.0,
  /
 
  &param5
@@ -261,7 +264,7 @@
 
  &param9
  ! --- Variáveis de Saída NetCDF ---
- output_format    = 1,     ! NetCDF3 classic (sem HDF5) — compatível com VLab
+ output_format    = 2,     ! NetCDF4 — VLab tem libnetcdf.so.19 com HDF5
  output_filetype  = 1,
  output_interp    = 0,
  output_rain      = 1,     ! precipitação acumulada

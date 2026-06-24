@@ -1,170 +1,273 @@
-#!/usr/bin/env python3
+"""
+plot_and_animate.py  — Visualiza saída do CM1 e gera GIF/PNG compartilháveis.
+
+Uso:
+    python plot_and_animate.py cm1out.nc
+
+Saídas:
+    cm1_animation.gif     — animação completa (envie ao Antigravity)
+    cm1_snapshot_T???.png — frames individuais em momentos-chave
+    cm1_panel_final.png   — painel 4x do último timestep
+"""
+
 import sys
 import os
-import argparse
-import xarray as xr
 import numpy as np
+import matplotlib
+matplotlib.use("Agg")          # sem display — funciona no VLab
 import matplotlib.pyplot as plt
-import matplotlib.animation as animation
+import matplotlib.gridspec as gridspec
+from matplotlib.colors import BoundaryNorm, TwoSlopeNorm
+import netCDF4 as nc
 
-def main():
-    parser = argparse.ArgumentParser(description="Plot and animate CM1 test cases.")
-    parser.add_argument('--case', choices=['straka', 'wet_microburst'], required=True,
-                        help="Case to plot: 'straka' or 'wet_microburst'")
-    parser.add_argument('--file', default='cm1out.nc',
-                        help="NetCDF output file path (default: cm1out.nc)")
-    args = parser.parse_args()
-    
-    nc_path = args.file
-    if not os.path.exists(nc_path):
-        # Check if there are multiple netCDF files (e.g., cm1out_000001.nc etc)
-        # and open them as a dataset
-        import glob
-        files = sorted(glob.glob('cm1out_*.nc'))
-        if files:
-            print(f"Opening multiple files: {files}")
-            ds = xr.open_mfdataset(files, combine='nested', concat_dim='time')
-        else:
-            print(f"Error: NetCDF file(s) not found.")
-            sys.exit(1)
+try:
+    from PIL import Image
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+    print("  [aviso] Pillow não encontrado — GIF será gerado via matplotlib")
+
+# ─────────────────────────────────────────────
+# Parâmetros do usuário
+# ─────────────────────────────────────────────
+NCFILE   = sys.argv[1] if len(sys.argv) > 1 else "cm1out.nc"
+OUT_GIF  = "cm1_animation.gif"
+OUT_FIG  = "cm1_panel_final.png"
+DPI      = 110          # resolução dos frames
+SKIP     = 1            # usar todos os tempos (2 = um de cada 2)
+
+# Níveis de contorno
+LEVELS_W   = np.arange(-20, 21, 2)          # w (m/s)
+LEVELS_THP = np.arange(-20, 0.5, 2)         # θ' negativo (pool frio, K)
+LEVELS_DBZ = np.arange(10, 75, 5)           # refletividade (dBZ)
+
+CMAP_W   = "RdBu_r"
+CMAP_THP = "Blues_r"
+CMAP_DBZ = "gist_ncar"
+
+# ─────────────────────────────────────────────
+# Ler arquivo NetCDF
+# ─────────────────────────────────────────────
+print(f"  Lendo: {NCFILE}")
+ds = nc.Dataset(NCFILE)
+
+# Coordenadas — tenta nomes padrão do CM1
+def get_var(ds, *names):
+    for n in names:
+        if n in ds.variables:
+            return ds.variables[n][:]
+    return None
+
+x  = get_var(ds, "xh", "x", "ni")   # km
+z  = get_var(ds, "z",  "zh", "nk")  # km
+t  = get_var(ds, "time", "nt")       # s
+
+# Converter para km se necessário
+if x is not None and np.max(np.abs(x)) > 1000:
+    x = x / 1000.0   # m → km
+if z is not None and np.max(np.abs(z)) > 1000:
+    z = z / 1000.0   # m → km
+
+# Variáveis 3D (t, z, x) ou (t, nk, ni)
+w    = get_var(ds, "winterp", "w")
+th   = get_var(ds, "th", "theta")
+th0  = get_var(ds, "th0")            # estado base
+dbz  = get_var(ds, "dbz")
+qr   = get_var(ds, "qr")
+qc   = get_var(ds, "qc")
+qi   = get_var(ds, "qi")
+
+# θ' = θ - θ0
+if th is not None and th0 is not None:
+    thp = th - th0[np.newaxis, :, :]
+elif th is not None:
+    thp = th - th[:, :, :].mean(axis=(0, 2), keepdims=True)
+else:
+    thp = None
+
+nt = t.shape[0] if t is not None else (w.shape[0] if w is not None else 1)
+print(f"  Timesteps: {nt}  |  shape w: {w.shape if w is not None else 'N/A'}")
+
+# ─────────────────────────────────────────────
+# Função de plotagem de um frame
+# ─────────────────────────────────────────────
+def plot_frame(tidx, ax_w, ax_thp, ax_dbz, ax_qr):
+    """Plota 4 painéis para o instante tidx."""
+
+    # --- Eixos base ---
+    if x is None:
+        nx = w.shape[-1] if w is not None else 1
+        nz = w.shape[-2] if w is not None else 1
+        xg = np.linspace(0, nx * 0.1, nx)
+        zg = np.linspace(0, nz * 0.15, nz)
     else:
-        print(f"Opening single NetCDF file: {nc_path}")
-        ds = xr.open_dataset(nc_path)
-        
-    print("Dataset loaded. Variables available:")
-    print(list(ds.data_vars))
-    
-    # 2D Cartesian slice (ny=1, so we select y=0)
-    if 'y' in ds.dims:
-        ds = ds.isel(y=0)
-    elif 'yh' in ds.dims:
-        ds = ds.isel(yh=0)
-        
-    # Detect coordinate names and convert to km
-    x_coord = 'xh' if 'xh' in ds.coords else ('x' if 'x' in ds.coords else None)
-    z_coord = 'zh' if 'zh' in ds.coords else ('z' if 'z' in ds.coords else None)
-    
-    if not x_coord or not z_coord:
-        print("Error: Could not identify X or Z coordinates in dataset.")
-        sys.exit(1)
-        
-    # Get arrays
-    x = ds[x_coord].values
-    z = ds[z_coord].values
-    
-    # Check units (if in meters, convert to km for plotting)
-    x_factor = 1.0
-    z_factor = 1.0
-    x_unit = ds[x_coord].attrs.get('units', 'km')
-    z_unit = ds[z_coord].attrs.get('units', 'km')
-    
-    if x_unit == 'm' or np.max(x) > 1000.0:
-        x_factor = 0.001
-        x_unit = 'km'
-    if z_unit == 'm' or np.max(z) > 1000.0:
-        z_factor = 0.001
-        z_unit = 'km'
-        
-    x_km = x * x_factor
-    z_km = z * z_factor
-    
-    # Create grid for vector plotting (subsample to avoid clutter)
-    X_grid, Z_grid = np.meshgrid(x_km, z_km)
-    skip_x = max(1, len(x_km) // 20)
-    skip_z = max(1, len(z_km) // 15)
-    
-    fig, ax = plt.subplots(figsize=(10, 6), dpi=100)
-    
-    # We will animate frame by frame
-    times = ds['time'].values
-    num_frames = len(times)
-    
-    print(f"Generating animation with {num_frames} frames...")
-    
-    def update(frame_idx):
-        ax.clear()
-        t_sec = times[frame_idx]
-        t_min = t_sec / 60.0
-        
-        # Get variables at this time step
-        u = ds['u'].isel(time=frame_idx).values
-        # Note: w is on flux grid in Z (nz+1), we interpolate to half grid (nz) for vector plotting
-        w_flux = ds['w'].isel(time=frame_idx).values
-        w = 0.5 * (w_flux[:-1, :] + w_flux[1:, :])
-        
-        # Destagger U if it's on flux grid (nx+1)
-        if u.shape[1] > len(x):
-            u = 0.5 * (u[:, :-1] + u[:, 1:])
-            
-        if args.case == 'straka':
-            thpert = ds['thpert'].isel(time=frame_idx).values
-            
-            # Plot perturbation potential temperature (cold pool)
-            im = ax.pcolormesh(x_km, z_km, thpert, cmap='RdBu_r', vmin=-15.0, vmax=2.0, shading='auto')
-            if frame_idx == 0:
-                fig.colorbar(im, ax=ax, label=r'$\theta$ Perturbation (K)')
-                
-            # Plot wind vectors
-            ax.quiver(X_grid[::skip_z, ::skip_x], Z_grid[::skip_z, ::skip_x], 
-                      u[::skip_z, ::skip_x], w[::skip_z, ::skip_x], 
-                      color='black', alpha=0.6, scale=150)
-            
-            ax.set_title(f"Straka Dry Density Current | Time = {t_min:.1f} min", fontsize=14, fontweight='bold')
-            ax.set_ylabel(f"Height ({z_unit})")
-            ax.set_xlabel(f"Distance ({x_unit})")
-            ax.set_xlim(np.min(x_km), np.max(x_km))
-            ax.set_ylim(0.0, 4.0)  # Density current stays near surface (domain is 6.4km, plot lower 4km)
-            
-        elif args.case == 'wet_microburst':
-            # Check if dbz is present, otherwise use rain mixing ratio qr
-            if 'dbz' in ds.data_vars:
-                var_name = 'dbz'
-                cmap = 'turbo'
-                vmin, vmax = 0.0, 70.0
-                label = 'Radar Reflectivity (dBZ)'
-                data = ds['dbz'].isel(time=frame_idx).values
-            else:
-                var_name = 'qr'
-                cmap = 'YlGnBu'
-                vmin, vmax = 0.0, 0.005 # 5 g/kg
-                label = 'Rain Water Mixing Ratio (kg/kg)'
-                data = ds['qr'].isel(time=frame_idx).values
-                
-            thpert = ds['thpert'].isel(time=frame_idx).values
-            
-            # Plot rain shaft
-            im = ax.pcolormesh(x_km, z_km, data, cmap=cmap, vmin=vmin, vmax=vmax, shading='auto')
-            if frame_idx == 0:
-                fig.colorbar(im, ax=ax, label=label)
-                
-            # Overplot cold pool boundaries as contours
-            contours = ax.contour(x_km, z_km, thpert, levels=[-6.0, -4.0, -2.0, -0.5], 
-                                  colors='white', linewidths=1.5, linestyles='dashed')
-            if frame_idx == 0 and len(contours.collections) > 0:
-                ax.clabel(contours, inline=True, fmt='%1.1f K', fontsize=9, colors='white')
-                
-            # Plot wind vectors
-            ax.quiver(X_grid[::skip_z, ::skip_x], Z_grid[::skip_z, ::skip_x], 
-                      u[::skip_z, ::skip_x], w[::skip_z, ::skip_x], 
-                      color='black', alpha=0.5, scale=200)
-            
-            ax.set_title(f"Convective Wet Downburst (Microburst) | Time = {t_min:.1f} min", fontsize=14, fontweight='bold')
-            ax.set_ylabel(f"Height ({z_unit})")
-            ax.set_xlabel(f"Distance ({x_unit})")
-            ax.set_xlim(np.min(x_km), np.max(x_km))
-            ax.set_ylim(0.0, 8.0)  # Plot lower 8km of the 12km domain
-            
-        fig.tight_layout()
+        xg = x
+        zg = z if z is not None else np.arange(w.shape[-2]) * 0.15
 
-    ani = animation.FuncAnimation(fig, update, frames=num_frames, interval=250)
-    gif_name = f"{args.case}_animation.gif"
-    ani.save(gif_name, writer='pillow')
-    plt.close()
-    
-    print(f"Animation successfully generated and saved to: {gif_name}")
-    print("To view in Jupyter, execute:")
-    print("from IPython.display import Image, display")
-    print(f"display(Image(filename='{gif_name}'))")
+    XX, ZZ = np.meshgrid(xg, zg)
+    t_min  = (t[tidx] / 60.0) if t is not None else tidx * 5.0
 
-if __name__ == '__main__':
-    main()
+    def _slice(arr):
+        """Pega o slice 2D (z, x) do timestep tidx."""
+        if arr is None:
+            return None
+        a = arr[tidx]
+        # Se 3D com y: pega y=0
+        if a.ndim == 3:
+            a = a[:, 0, :]
+        return np.squeeze(a)
+
+    w_2d   = _slice(w)
+    thp_2d = _slice(thp)
+    dbz_2d = _slice(dbz)
+    qr_2d  = _slice(qr)
+
+    # ── Painel 1: velocidade vertical w ──────────────────────────────
+    if w_2d is not None:
+        norm = TwoSlopeNorm(vmin=-20, vcenter=0, vmax=20)
+        cf = ax_w.contourf(XX, ZZ, w_2d, levels=LEVELS_W,
+                           cmap=CMAP_W, norm=norm, extend="both")
+        ax_w.set_title(f"w (m/s) — t={t_min:.0f} min", fontsize=9)
+        plt.colorbar(cf, ax=ax_w, fraction=0.03, pad=0.02)
+
+    # ── Painel 2: perturbação θ (pool frio) ──────────────────────────
+    if thp_2d is not None:
+        cold = np.where(thp_2d < 0, thp_2d, np.nan)
+        cf2 = ax_thp.contourf(XX, ZZ, cold, levels=LEVELS_THP,
+                              cmap=CMAP_THP, extend="min")
+        ax_thp.set_title(f"θ' frio (K) — t={t_min:.0f} min", fontsize=9)
+        plt.colorbar(cf2, ax=ax_thp, fraction=0.03, pad=0.02)
+        # Contorno positivo (updraft térmico)
+        warm = np.where(thp_2d > 0.5, thp_2d, np.nan)
+        ax_thp.contour(XX, ZZ, warm,
+                       levels=[1, 2, 4, 6], colors="red", linewidths=0.8)
+
+    # ── Painel 3: refletividade dBZ ──────────────────────────────────
+    if dbz_2d is not None:
+        norm3 = BoundaryNorm(LEVELS_DBZ, ncolors=256)
+        cf3 = ax_dbz.contourf(XX, ZZ, np.where(dbz_2d > 10, dbz_2d, np.nan),
+                              levels=LEVELS_DBZ, cmap=CMAP_DBZ,
+                              norm=norm3, extend="max")
+        ax_dbz.set_title(f"dBZ — t={t_min:.0f} min", fontsize=9)
+        plt.colorbar(cf3, ax=ax_dbz, fraction=0.03, pad=0.02)
+
+    # ── Painel 4: mixing ratio chuva qr (g/kg) ───────────────────────
+    if qr_2d is not None:
+        cf4 = ax_qr.contourf(XX, ZZ, qr_2d * 1000.0,
+                             levels=np.arange(0.1, 8, 0.5),
+                             cmap="Blues", extend="max")
+        ax_qr.set_title(f"qr (g/kg) — t={t_min:.0f} min", fontsize=9)
+        plt.colorbar(cf4, ax=ax_qr, fraction=0.03, pad=0.02)
+
+    # Labels comuns
+    for ax in [ax_w, ax_thp, ax_dbz, ax_qr]:
+        ax.set_xlabel("x (km)", fontsize=8)
+        ax.set_ylabel("z (km)", fontsize=8)
+        ax.set_ylim(0, 12)
+        ax.tick_params(labelsize=7)
+
+# ─────────────────────────────────────────────
+# Gerar frames
+# ─────────────────────────────────────────────
+frames_pil = []
+frame_files = []
+
+indices = list(range(0, nt, SKIP))
+print(f"  Gerando {len(indices)} frames...")
+
+for i, tidx in enumerate(indices):
+    fig = plt.figure(figsize=(14, 7), facecolor="#1a1a2e")
+    gs  = gridspec.GridSpec(2, 2, hspace=0.38, wspace=0.35,
+                            left=0.06, right=0.97, top=0.93, bottom=0.08)
+    ax_w   = fig.add_subplot(gs[0, 0])
+    ax_thp = fig.add_subplot(gs[0, 1])
+    ax_dbz = fig.add_subplot(gs[1, 0])
+    ax_qr  = fig.add_subplot(gs[1, 1])
+
+    for ax in [ax_w, ax_thp, ax_dbz, ax_qr]:
+        ax.set_facecolor("#0d1117")
+        ax.tick_params(colors="white", labelsize=7)
+        ax.xaxis.label.set_color("white")
+        ax.yaxis.label.set_color("white")
+        ax.title.set_color("white")
+        for spine in ax.spines.values():
+            spine.set_edgecolor("#444")
+
+    t_min = (t[tidx] / 60.0) if t is not None else tidx * 5.0
+    fig.suptitle(f"CM1 — Toró Subtropical  |  t = {t_min:.0f} min",
+                 color="white", fontsize=12, fontweight="bold")
+
+    plot_frame(tidx, ax_w, ax_thp, ax_dbz, ax_qr)
+
+    fname = f"_frame_{i:04d}.png"
+    fig.savefig(fname, dpi=DPI, facecolor=fig.get_facecolor())
+    frame_files.append(fname)
+
+    if HAS_PIL:
+        frames_pil.append(Image.open(fname).copy())
+
+    plt.close(fig)
+    if (i + 1) % 5 == 0:
+        print(f"    frame {i+1}/{len(indices)}")
+
+# ─────────────────────────────────────────────
+# Salvar GIF
+# ─────────────────────────────────────────────
+if HAS_PIL and frames_pil:
+    print(f"  Salvando GIF: {OUT_GIF}")
+    frames_pil[0].save(
+        OUT_GIF,
+        save_all=True,
+        append_images=frames_pil[1:],
+        optimize=True,
+        duration=400,          # ms por frame
+        loop=0
+    )
+    print(f"  ✓ GIF salvo: {OUT_GIF}")
+else:
+    print("  [info] PIL não disponível — instale com: pip install Pillow")
+    print(f"  Frames salvos como: _frame_XXXX.png")
+
+# ─────────────────────────────────────────────
+# Salvar painel final (último timestep)
+# ─────────────────────────────────────────────
+fig2 = plt.figure(figsize=(14, 7), facecolor="#1a1a2e")
+gs2  = gridspec.GridSpec(2, 2, hspace=0.38, wspace=0.35,
+                         left=0.06, right=0.97, top=0.93, bottom=0.08)
+ax_w2   = fig2.add_subplot(gs2[0, 0])
+ax_thp2 = fig2.add_subplot(gs2[0, 1])
+ax_dbz2 = fig2.add_subplot(gs2[1, 0])
+ax_qr2  = fig2.add_subplot(gs2[1, 1])
+
+for ax in [ax_w2, ax_thp2, ax_dbz2, ax_qr2]:
+    ax.set_facecolor("#0d1117")
+    ax.tick_params(colors="white", labelsize=7)
+    ax.xaxis.label.set_color("white")
+    ax.yaxis.label.set_color("white")
+    ax.title.set_color("white")
+    for spine in ax.spines.values():
+        spine.set_edgecolor("#444")
+
+t_final = (t[-1] / 60.0) if t is not None else nt * 5.0
+fig2.suptitle(f"CM1 — Toró Subtropical  |  t = {t_final:.0f} min (final)",
+              color="white", fontsize=12, fontweight="bold")
+
+plot_frame(nt - 1, ax_w2, ax_thp2, ax_dbz2, ax_qr2)
+fig2.savefig(OUT_FIG, dpi=150, facecolor=fig2.get_facecolor())
+plt.close(fig2)
+print(f"  ✓ Painel final salvo: {OUT_FIG}")
+
+# ─────────────────────────────────────────────
+# Limpar frames temporários
+# ─────────────────────────────────────────────
+for f in frame_files:
+    try:
+        os.remove(f)
+    except OSError:
+        pass
+
+ds.close()
+print("\n  Pronto! Arquivos gerados:")
+if HAS_PIL:
+    print(f"    → {OUT_GIF}   (envie ao Antigravity)")
+print(f"    → {OUT_FIG}   (painel do instante final)")
