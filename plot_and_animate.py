@@ -103,17 +103,12 @@ qr   = get_var(ds, "qr")
 qc   = get_var(ds, "qc")
 qi   = get_var(ds, "qi")
 
-# θ' = θ - θ0  (funciona com th0 de qualquer shape)
-if th is not None and th0 is not None:
-    # Expande th0 para mesma forma que th via broadcast seguro
-    th0_bc = np.squeeze(th0)                  # remove dims de tamanho 1
-    # Reshape para (1, nk, 1, 1) ou (1, nk, 1) para broadcast correto
-    while th0_bc.ndim < th.ndim - 1:
-        th0_bc = th0_bc[..., np.newaxis]      # adiciona dim no final
-    thp = th - th0_bc[np.newaxis, ...]        # adiciona dim tempo
-elif th is not None:
-    # Sem th0: usa média temporal e horizontal como base
-    thp = th - th.mean(axis=(0,), keepdims=True)
+# θ' = θ - θ_base  (base = média em t, x, y para cada nível z)
+if th is not None:
+    # axis 1 é sempre z (nk). Média sobre todos os outros eixos.
+    axes_mean = tuple(i for i in range(th.ndim) if i != 1)
+    th_base = th.mean(axis=axes_mean, keepdims=True)   # → (1, nk, 1, 1)
+    thp = th - th_base                                  # → (nt, nk, nj, ni)
 else:
     thp = None
 
