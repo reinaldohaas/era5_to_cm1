@@ -103,11 +103,17 @@ qr   = get_var(ds, "qr")
 qc   = get_var(ds, "qc")
 qi   = get_var(ds, "qi")
 
-# θ' = θ - θ0
+# θ' = θ - θ0  (funciona com th0 de qualquer shape)
 if th is not None and th0 is not None:
-    thp = th - th0[np.newaxis, :, :]
+    # Expande th0 para mesma forma que th via broadcast seguro
+    th0_bc = np.squeeze(th0)                  # remove dims de tamanho 1
+    # Reshape para (1, nk, 1, 1) ou (1, nk, 1) para broadcast correto
+    while th0_bc.ndim < th.ndim - 1:
+        th0_bc = th0_bc[..., np.newaxis]      # adiciona dim no final
+    thp = th - th0_bc[np.newaxis, ...]        # adiciona dim tempo
 elif th is not None:
-    thp = th - th[:, :, :].mean(axis=(0, 2), keepdims=True)
+    # Sem th0: usa média temporal e horizontal como base
+    thp = th - th.mean(axis=(0,), keepdims=True)
 else:
     thp = None
 
@@ -134,14 +140,15 @@ def plot_frame(tidx, ax_w, ax_thp, ax_dbz, ax_qr):
     t_min  = (t[tidx] / 60.0) if t is not None else tidx * 5.0
 
     def _slice(arr):
-        """Pega o slice 2D (z, x) do timestep tidx."""
+        """Pega slice 2D (nk, ni) do timestep tidx — robusto para qualquer shape."""
         if arr is None:
             return None
-        a = arr[tidx]
-        # Se 3D com y: pega y=0
-        if a.ndim == 3:
-            a = a[:, 0, :]
-        return np.squeeze(a)
+        a = arr[tidx]               # (nk, nj, ni) ou (nk, ni) — remove dim tempo
+        a = np.squeeze(a)           # remove TODAS as dims de tamanho 1 (nj=1)
+        # Garantir 2D: se ainda 3D+ tomar apenas (nk, ni) = últimas 2 dims
+        if a.ndim > 2:
+            a = a.reshape(a.shape[-2], a.shape[-1])
+        return a
 
     w_2d   = _slice(w)
     thp_2d = _slice(thp)
