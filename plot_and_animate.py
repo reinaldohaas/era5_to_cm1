@@ -83,6 +83,14 @@ def get_coord_km(ds, *names):
 
 x = get_coord_km(ds, "xh", "x", "ni")
 z = get_coord_km(ds, "z",  "zh", "nk")
+
+def get_var(ds, *names):
+    """Lê variável do NetCDF pelo primeiro nome encontrado."""
+    for n in names:
+        if n in ds.variables:
+            return ds.variables[n][:]
+    return None
+
 t = get_var(ds, "time", "nt")
 
 
