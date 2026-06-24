@@ -94,7 +94,7 @@
  isnd      =  5,           ! Weisman-Klemp analítica
                            !   θ_sfc=300K, RH_sfc=75% (PBL 14g/kg)
                            !   z_trop=12km, θ_trop=343K, T_trop=213K
- iwnd      =  1,           ! vento: perfil linear (via param8)
+ iwnd      =  0,           ! vento ambiente ZERO (necessário para 2D não ser rasgado pelo shear)
  itern     =  0,           ! sem topografia
  iinit     =  8,           ! bolha WK clássica: bhrad=10km, bvrad=1.5km,
                            !   +2K + ruído aleatório (Klemp & Wilhelmson 1978)
@@ -103,7 +103,7 @@
  ibalance  =  0,
  iorigin   =  2,
  axisymm   =  0,
- imove     =  1,           ! domínio se move com a tempestade
+ imove     =  0,           ! sem vento, tempestade não se move
  iptra     =  0,
  npt       =  1,
  pdtra     =  1,
@@ -122,9 +122,8 @@
  zd      =  9000.0,        ! m — início do sponge no topo
  xhd     =  1500.0,        ! m — sponge lateral
  alphobc =    60.0,
- umove   =   12.0,         ! m/s — velocidade do domínio em x (segue a tempestade)
-                           !   estimativa: u_sfc + du/dz*z_storm/2 ≈ 5 + 3e-3*4000/2 ≈ 11 m/s
- vmove   =    6.0,         ! m/s — velocidade do domínio em y
+ umove   =    0.0,         ! m/s
+ vmove   =    0.0,         ! m/s
  ! --- SGS ---
  v_t     =    7.0,
  l_h     =  100.0,         ! m — escala horizontal (igual ao dx)
