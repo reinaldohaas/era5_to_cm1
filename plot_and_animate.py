@@ -51,22 +51,40 @@ CMAP_DBZ = "gist_ncar"
 print(f"  Lendo: {NCFILE}")
 ds = nc.Dataset(NCFILE)
 
-# Coordenadas — tenta nomes padrão do CM1
-def get_var(ds, *names):
+# ─────────────────────────────────────────────
+# Coordenadas — detecção robusta de unidades
+# ─────────────────────────────────────────────
+def get_coord_km(ds, *names):
+    """Lê coordenada e converte para km, detectando unidades automaticamente."""
     for n in names:
         if n in ds.variables:
-            return ds.variables[n][:]
+            v   = ds.variables[n]
+            arr = v[:]
+            # Verificar atributo 'units' primeiro
+            units = getattr(v, "units", "").lower()
+            if "meter" in units or units == "m":
+                arr = arr / 1000.0    # metros → km
+                print(f"    {n}: unidade='{units}' → convertido para km "
+                      f"(range: {arr.min():.2f} – {arr.max():.2f} km)")
+            elif "km" in units or "kilometer" in units:
+                print(f"    {n}: unidade='{units}' → já em km "
+                      f"(range: {arr.min():.2f} – {arr.max():.2f} km)")
+            else:
+                # Sem atributo: heurística pelo valor máximo
+                if np.max(np.abs(arr)) > 500:
+                    arr = arr / 1000.0
+                    print(f"    {n}: unidade desconhecida ('{units}') → "
+                          f"assumido metros, convertido (range: {arr.min():.2f} – {arr.max():.2f} km)")
+                else:
+                    print(f"    {n}: unidade desconhecida ('{units}') → "
+                          f"assumido km (range: {arr.min():.2f} – {arr.max():.2f} km)")
+            return arr
     return None
 
-x  = get_var(ds, "xh", "x", "ni")   # km
-z  = get_var(ds, "z",  "zh", "nk")  # km
-t  = get_var(ds, "time", "nt")       # s
+x = get_coord_km(ds, "xh", "x", "ni")
+z = get_coord_km(ds, "z",  "zh", "nk")
+t = get_var(ds, "time", "nt")
 
-# Converter para km se necessário
-if x is not None and np.max(np.abs(x)) > 1000:
-    x = x / 1000.0   # m → km
-if z is not None and np.max(np.abs(z)) > 1000:
-    z = z / 1000.0   # m → km
 
 # Variáveis 3D (t, z, x) ou (t, nk, ni)
 w    = get_var(ds, "winterp", "w")
